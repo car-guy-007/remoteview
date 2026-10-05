@@ -6,53 +6,40 @@
 <meta name="theme-color" content="#0c0c0e">
 <title>RemoteView</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}
-.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}
-h1{font-size:42px;margin:0 0 5px}
-p{color:#aaa;line-height:1.5}
-button,input{font:inherit;border-radius:12px;padding:14px 18px}
-button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}
-.secondary{background:#29292e;color:#fff}
-.danger{background:#7f1d1d;color:#fff}
-.hide{display:none!important}
-.code{font-size:34px;font-weight:800;letter-spacing:.14em;margin:12px 0;word-break:break-all}
-.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}
-a{color:#9ec5ff;word-break:break-all}\n#qr{display:block;background:#fff;padding:8px;border-radius:14px;width:min(225px,100%);height:auto;margin:14px 0}
-video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}
-small{color:#888}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-transform:uppercase;letter-spacing:.12em;font-weight:700}
+*{box-sizing:border-box}body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}h1{font-size:42px;margin:0 0 5px}p{color:#aaa;line-height:1.5}button,input{font:inherit;border-radius:12px;padding:14px 18px}button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}.secondary{background:#29292e;color:#fff}.danger{background:#7f1d1d;color:#fff}.hide{display:none!important}.code{font-size:34px;font-weight:800;letter-spacing:.14em;margin:12px 0;word-break:break-all}.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}.error{color:#ffb4b4;border:1px solid #5b2424}.ok{color:#baf7c8}.row{display:flex;gap:10px;flex-wrap:wrap}input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-transform:uppercase;letter-spacing:.12em;font-weight:700}a{color:#9ec5ff;word-break:break-all}video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}#qr{display:block;background:#fff;padding:8px;border-radius:14px;width:min(245px,100%);height:auto;margin:14px 0}small{color:#888}.muted{color:#888;font-size:13px}
 </style>
 </head>
 <body>
 <div id="mainCard" class="card">
   <h1>RemoteView</h1>
   <p>View your PC screen on your phone. No install. No admin. View-only.</p>
+  <div id="startupError" class="status error hide"></div>
   <div id="homePane">
     <div class="row">
-      <button id="shareBtn">Share this PC</button>
-      <button id="viewBtn" class="secondary">View a screen</button>
+      <button id="shareBtn" type="button">Share this PC</button>
+      <button id="viewBtn" type="button" class="secondary">View a screen</button>
     </div>
+    <p class="muted">The browser will ask which screen/window you want to share. RemoteView cannot control your PC.</p>
   </div>
   <div id="joinPane" class="hide">
     <p>Enter the room code shown on your PC:</p>
     <input id="roomInput" maxlength="12" placeholder="ROOM CODE" autocomplete="off" autocapitalize="characters">
     <div class="row" style="margin-top:12px">
-      <button id="joinBtn">Connect</button>
-      <button id="backBtn" class="secondary">Back</button>
+      <button id="joinBtn" type="button">Connect</button>
+      <button id="backBtn" type="button" class="secondary">Back</button>
     </div>
   </div>
   <div id="sharePane" class="hide">
     <div>ROOM CODE</div>
     <div id="roomCode" class="code"></div>
     <div id="hostStatus" class="status">Starting…</div>
-    <p>Scan this QR code with your iPhone camera:</p>\n    <canvas id="qr" width="225" height="225"></canvas>\n    <p>Or open:</p>
-    <p><a id="baseLink" target="_blank" rel="noopener"></a></p>
-    <p>Tap <b>View a screen</b> and enter the room code above.</p>
+    <p>Scan this QR code with your iPhone camera:</p>
+    <canvas id="qr" width="245" height="245"></canvas>
+    <p>Or open the same RemoteView page on your phone and enter the room code.</p>
+    <p><a id="viewerLink" target="_blank" rel="noopener"></a></p>
     <div class="row">
-      <button id="copyBtn" class="secondary">Copy viewer link</button>
-      <button id="stopBtn" class="danger">Stop sharing</button>
+      <button id="copyBtn" type="button" class="secondary">Copy viewer link</button>
+      <button id="stopBtn" type="button" class="danger">Stop sharing</button>
     </div>
     <p><small>Closing this tab also stops sharing.</small></p>
   </div>
@@ -61,142 +48,84 @@ input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-tra
 <div id="viewerCard" class="card hide">
   <h1 style="font-size:30px">RemoteView</h1>
   <div id="viewerStatus" class="status">Loading viewer…</div>
+  <div id="viewerError" class="status error hide"></div>
   <video id="remoteVideo" autoplay playsinline muted></video>
-  <div id="viewerError" class="status hide" style="color:#ffb4b4"></div>
-  <div class="row" style="margin-top:12px"><button id="leaveBtn" class="secondary">Leave</button></div>
+  <div class="row" style="margin-top:12px">
+    <button id="playBtn" type="button" class="secondary hide">Play video</button>
+    <button id="leaveBtn" type="button" class="secondary">Leave</button>
+  </div>
 </div>
 
-<script type="module">
-const APP_ID = 'remoteview-cg7-mqtt-v4';
-const $ = id => document.getElementById(id);
-let room = null;
-let stream = null;
+<script>
+'use strict';
+const APP_ID='remoteview-cg7-v5';
+const TRYSTERO_URL='https://esm.run/trystero@0.25.4';
+const $=id=>document.getElementById(id);
+let room=null,screenStream=null,viewerTimer=null;
 
-function makeRoomCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map(b => alphabet[b % alphabet.length]).join('');
+function cleanCode(v){return(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)}
+function makeRoomCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=new Uint8Array(8);crypto.getRandomValues(b);return[...b].map(x=>a[x%a.length]).join('')}
+function showPane(id){['homePane','joinPane','sharePane'].forEach(x=>$(x).classList.add('hide'));$(id).classList.remove('hide')}
+function setHostStatus(msg,isError=false){const el=$('hostStatus');el.textContent=msg;el.classList.toggle('error',isError)}
+function setViewerStatus(msg,isError=false){$('viewerStatus').textContent=msg;$('viewerError').classList.add('hide');if(isError){$('viewerError').textContent=msg;$('viewerError').classList.remove('hide')}}
+async function loadTrystero(){const mod=await import(TRYSTERO_URL);if(typeof mod.joinRoom!=='function')throw new Error('Connection engine loaded without joinRoom()');return mod.joinRoom}
+
+// Self-contained QR Model 2 v5-L generator (sufficient for this app's short HTTPS viewer URLs).
+function makeQrMatrix(text){
+  const data=new TextEncoder().encode(text);if(data.length>106)throw new Error('Viewer link is too long for QR');
+  const SIZE=37,DATA=108,ECC=26,MASK=0,bits=[],add=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>>i)&1)};
+  add(4,4);add(data.length,8);for(const b of data)add(b,8);const cap=DATA*8,term=Math.min(4,cap-bits.length);for(let i=0;i<term;i++)bits.push(0);while(bits.length%8)bits.push(0);
+  const d=[];for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i+j];d.push(b)}for(let p=0;d.length<DATA;p++)d.push(p%2?0x11:0xEC);const cw=d.concat(qrRs(d,ECC));
+  const m=Array.from({length:SIZE},()=>Array(SIZE).fill(false)),fn=Array.from({length:SIZE},()=>Array(SIZE).fill(false));
+  const set=(x,y,v)=>{if(x<0||y<0||x>=SIZE||y>=SIZE)return;m[y][x]=!!v;fn[y][x]=true};
+  const finder=(cx,cy)=>{for(let dy=-1;dy<=7;dy++)for(let dx=-1;dx<=7;dx++){const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=SIZE||y>=SIZE)continue;const z=dx>=0&&dx<=6&&dy>=0&&dy<=6;set(x,y,z&&(dx===0||dx===6||dy===0||dy===6||(dx>=2&&dx<=4&&dy>=2&&dy<=4)))}};
+  const align=(cx,cy)=>{for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(cx+dx,cy+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1)};
+  finder(0,0);finder(SIZE-7,0);finder(0,SIZE-7);for(let i=8;i<SIZE-8;i++){set(i,6,i%2===0);set(6,i,i%2===0)}align(30,30);
+  const fmt=qrFormatBits((1<<3)|MASK),fb=i=>((fmt>>>i)&1)!==0;for(let i=0;i<=5;i++)set(8,i,fb(i));set(8,7,fb(6));set(8,8,fb(7));set(7,8,fb(8));for(let i=9;i<15;i++)set(14-i,8,fb(i));for(let i=0;i<8;i++)set(SIZE-1-i,8,fb(i));for(let i=8;i<15;i++)set(8,SIZE-15+i,fb(i));set(8,SIZE-8,true);
+  let bi=0,up=true;for(let right=SIZE-1;right>=1;right-=2){if(right===6)right--;for(let i=0;i<SIZE;i++){const y=up?SIZE-1-i:i;for(let j=0;j<2;j++){const x=right-j;if(fn[y][x])continue;let dark=false;if(bi<cw.length*8){dark=((cw[bi>>>3]>>>(7-(bi&7)))&1)!==0;bi++}if((x+y)%2===0)dark=!dark;m[y][x]=dark}}up=!up}return m
 }
-function cleanCode(value) {
-  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12);
+function drawQr(canvas,text){const m=makeQrMatrix(text),q=4,s=5,n=m.length,px=(n+q*2)*s;canvas.width=px;canvas.height=px;const c=canvas.getContext('2d');c.imageSmoothingEnabled=false;c.fillStyle='#fff';c.fillRect(0,0,px,px);c.fillStyle='#000';for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(m[y][x])c.fillRect((x+q)*s,(y+q)*s,s,s)}
+function qrFormatBits(v){let r=v<<10,g=0x537;for(let i=14;i>=10;i--)if((r>>>i)&1)r^=g<<(i-10);return(((v<<10)|r)^0x5412)&0x7FFF}
+function qrRs(data,deg){const g=qrGen(deg),r=new Array(deg).fill(0);for(const b of data){const f=b^r[0];r.shift();r.push(0);for(let i=0;i<deg;i++)r[i]^=qrMul(g[i+1],f)}return r}
+function qrGen(deg){let p=[1],root=1;for(let i=0;i<deg;i++){p=qrPmul(p,[1,root]);root=qrMul(root,2)}return p}
+function qrPmul(a,b){const o=new Array(a.length+b.length-1).fill(0);for(let i=0;i<a.length;i++)for(let j=0;j<b.length;j++)o[i+j]^=qrMul(a[i],b[j]);return o}
+function qrMul(x,y){let z=0;for(let i=0;i<8;i++){if(y&1)z^=x;y>>>=1;x<<=1;if(x&0x100)x^=0x11D}return z&255}
+
+async function startHost(){
+  try{
+    if(!window.isSecureContext)throw new Error('RemoteView must be opened over HTTPS.');
+    if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=='function')throw new Error('This browser does not support screen sharing. Use current Chrome or Edge on Windows.');
+    screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:6,max:10}},audio:false});
+    const code=makeRoomCode();showPane('sharePane');$('roomCode').textContent=code;setHostStatus('Preparing viewer link…');
+    const base=new URL(location.href);base.search='';base.hash='';const direct=new URL(base);direct.searchParams.set('room',code);$('viewerLink').href=direct.toString();$('viewerLink').textContent=direct.toString();$('copyBtn').dataset.link=direct.toString();drawQr($('qr'),direct.toString());
+    setHostStatus('Loading secure connection engine…');
+    const joinRoom=await loadTrystero();
+    room=joinRoom({appId:APP_ID},code,{onJoinError:details=>setHostStatus('Connection failed: '+(details?.error?.message||details?.error||'WebRTC could not connect'),true)});
+    setHostStatus('Waiting for your phone…');
+    room.onPeerJoin=peerId=>{try{room.addStream(screenStream,{target:peerId});setHostStatus('Phone connected — LIVE')}catch(e){setHostStatus('Could not send screen: '+(e?.message||e),true)}};
+    room.onPeerLeave=()=>setHostStatus('Viewer disconnected. Waiting for your phone…');
+    screenStream.getVideoTracks()[0]?.addEventListener('ended',stopHost);
+  }catch(e){if(screenStream){try{screenStream.getTracks().forEach(t=>t.stop())}catch{}screenStream=null}alert('RemoteView error: '+(e?.message||e));}
 }
-async function getJoinRoom() {
-  const mod = await import('https://esm.run/@trystero-p2p/mqtt');
-  return mod.joinRoom;
+function stopHost(){try{screenStream?.getTracks().forEach(t=>t.stop())}catch{}try{room?.leave()}catch{}screenStream=null;room=null;showPane('homePane')}
+
+async function startViewer(code){
+  code=cleanCode(code);if(!code)return;
+  $('mainCard').classList.add('hide');$('viewerCard').classList.remove('hide');$('viewerError').classList.add('hide');$('playBtn').classList.add('hide');setViewerStatus('Loading secure connection engine…');
+  try{
+    const joinRoom=await loadTrystero();setViewerStatus('Connecting to '+code+'…');
+    room=joinRoom({appId:APP_ID},code,{onJoinError:details=>setViewerStatus('Connection failed: '+(details?.error?.message||details?.error||'WebRTC could not connect'),true)});
+    room.onPeerJoin=()=>setViewerStatus('Connected to PC — waiting for screen…');
+    room.onPeerStream=incoming=>{const v=$('remoteVideo');v.srcObject=incoming;setViewerStatus('LIVE • VIEW ONLY');const p=v.play();if(p&&p.catch)p.catch(()=>{$('playBtn').classList.remove('hide')})};
+    room.onPeerLeave=()=>{$('remoteVideo').srcObject=null;setViewerStatus('PC disconnected.')};
+    clearTimeout(viewerTimer);viewerTimer=setTimeout(()=>{if(!$('viewerStatus').textContent.startsWith('LIVE'))setViewerStatus('Still connecting… If this persists, the network may require a TURN relay.',true)},20000);
+  }catch(e){setViewerStatus('Could not load connection engine: '+(e?.message||e),true)}
 }
-function showPane(id) {
-  ['homePane','joinPane','sharePane'].forEach(x => $(x).classList.add('hide'));
-  $(id).classList.remove('hide');
-}
-async function startHost() {
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 6, max: 10 } },
-      audio: false
-    });
-    const code = makeRoomCode();
-    showPane('sharePane');
-    $('roomCode').textContent = code;
-    $('hostStatus').textContent = 'Loading connection…';
+function leaveViewer(){clearTimeout(viewerTimer);try{room?.leave()}catch{}room=null;$('remoteVideo').srcObject=null;$('viewerCard').classList.add('hide');$('mainCard').classList.remove('hide');history.replaceState({},'',location.pathname);showPane('homePane')}
 
-    const base = new URL(location.href);
-    base.search = '';
-    base.hash = '';
-    $('baseLink').href = base.toString();
-    $('baseLink').textContent = base.toString();
-
-    const direct = new URL(base);
-    direct.searchParams.set('room', code);
-    $('copyBtn').dataset.link = direct.toString();\n    drawQr($('qr'), direct.toString());
-
-    const joinRoom = await getJoinRoom();
-    room = joinRoom({ appId: APP_ID }, code);
-    $('hostStatus').textContent = 'Waiting for your phone…';
-
-    room.onPeerJoin = peerId => {
-      room.addStream(stream, { target: peerId });
-      $('hostStatus').textContent = 'Phone connected — LIVE';
-    };
-    room.onPeerLeave = () => {
-      $('hostStatus').textContent = 'Viewer left. Waiting…';
-    };
-    stream.getVideoTracks()[0].addEventListener('ended', stopHost);
-  } catch (e) {
-    alert('RemoteView error: ' + (e?.message || e));
-  }
-}
-function stopHost() {
-  try { stream?.getTracks().forEach(t => t.stop()); } catch {}
-  try { room?.leave(); } catch {}
-  stream = null;
-  room = null;
-  showPane('homePane');
-}
-async function startViewer(code) {
-  code = cleanCode(code);
-  if (!code) return;
-
-  $('mainCard').classList.add('hide');
-  $('viewerCard').classList.remove('hide');
-
-  const status = $('viewerStatus');
-  const err = $('viewerError');
-  const video = $('remoteVideo');
-
-  try {
-    status.textContent = 'Connecting to ' + code + '…';
-    const joinRoom = await getJoinRoom();
-    room = joinRoom({ appId: APP_ID }, code);
-
-    room.onPeerJoin = () => {
-      status.textContent = 'Connected to PC — waiting for screen…';
-    };
-    room.onPeerStream = incoming => {
-      video.srcObject = incoming;
-      video.play().catch(() => {});
-      status.textContent = 'LIVE • VIEW ONLY';
-      err.classList.add('hide');
-    };
-    room.onPeerLeave = () => {
-      video.srcObject = null;
-      status.textContent = 'PC disconnected.';
-    };
-  } catch (e) {
-    status.textContent = 'RemoteView failed to connect.';
-    err.textContent = 'Could not start viewer:\n' + (e?.message || e);
-    err.classList.remove('hide');
-  }
-}
-function leaveViewer() {
-  try { room?.leave(); } catch {}
-  room = null;
-  $('remoteVideo').srcObject = null;
-  $('viewerCard').classList.add('hide');
-  $('mainCard').classList.remove('hide');
-  history.replaceState({},'',location.pathname);
-  showPane('homePane');
-}
-$('shareBtn').addEventListener('click', startHost);
-$('viewBtn').addEventListener('click', () => showPane('joinPane'));
-$('backBtn').addEventListener('click', () => showPane('homePane'));
-$('joinBtn').addEventListener('click', () => startViewer($('roomInput').value));
-$('roomInput').addEventListener('input', e => e.target.value = cleanCode(e.target.value));
-$('roomInput').addEventListener('keydown', e => { if (e.key === 'Enter') startViewer(e.target.value); });
-$('stopBtn').addEventListener('click', stopHost);
-$('leaveBtn').addEventListener('click', leaveViewer);
-$('copyBtn').addEventListener('click', async () => {
-  const text = $('copyBtn').dataset.link;
-  try {
-    await navigator.clipboard.writeText(text);
-    $('copyBtn').textContent = 'Copied';
-    setTimeout(() => $('copyBtn').textContent = 'Copy viewer link', 1000);
-  } catch {
-    prompt('Copy this link:', text);
-  }
-});
-const code = new URLSearchParams(location.search).get('room');
-if (code) startViewer(code);
+$('shareBtn').addEventListener('click',startHost);$('viewBtn').addEventListener('click',()=>showPane('joinPane'));$('backBtn').addEventListener('click',()=>showPane('homePane'));$('joinBtn').addEventListener('click',()=>startViewer($('roomInput').value));$('roomInput').addEventListener('input',e=>e.target.value=cleanCode(e.target.value));$('roomInput').addEventListener('keydown',e=>{if(e.key==='Enter')startViewer(e.target.value)});$('stopBtn').addEventListener('click',stopHost);$('leaveBtn').addEventListener('click',leaveViewer);$('playBtn').addEventListener('click',()=>{$('remoteVideo').play();$('playBtn').classList.add('hide')});$('copyBtn').addEventListener('click',async()=>{const text=$('copyBtn').dataset.link;try{await navigator.clipboard.writeText(text);$('copyBtn').textContent='Copied';setTimeout(()=>$('copyBtn').textContent='Copy viewer link',1000)}catch{prompt('Copy this link:',text)}});
+window.addEventListener('error',e=>{const el=$('startupError');el.textContent='Page error: '+(e.message||'unknown error');el.classList.remove('hide')});window.addEventListener('unhandledrejection',e=>{const el=$('startupError');el.textContent='Page error: '+(e.reason?.message||e.reason||'unknown error');el.classList.remove('hide')});
+const initialCode=new URLSearchParams(location.search).get('room');if(initialCode)startViewer(initialCode);
 </script>
 </body>
 </html>
