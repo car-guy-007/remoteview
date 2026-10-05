@@ -75,6 +75,7 @@
 <script>
 'use strict';
 const APP_ID='remoteview-cg7-v5';
+const BUILD='6';
 const TRYSTERO_URL='https://esm.run/trystero@0.25.4';
 const $=id=>document.getElementById(id);
 let room=null,screenStream=null,viewerTimer=null;
@@ -131,7 +132,7 @@ async function startHost(){
     if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=='function')throw new Error('This browser does not support screen sharing. Use current Chrome or Edge on Windows.');
     screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:6,max:10}},audio:false});
     const code=makeRoomCode();showPane('sharePane');$('roomCode').textContent=code;setHostStatus('Preparing viewer link…');
-    const base=new URL(location.href);base.search='';base.hash='';const direct=new URL(base);direct.searchParams.set('room',code);$('viewerLink').href=direct.toString();$('viewerLink').textContent=direct.toString();$('copyBtn').dataset.link=direct.toString();drawQr($('qr'),direct.toString());
+    const base=new URL(location.href);base.search='';base.hash='';base.searchParams.set('v',BUILD);const direct=new URL(base);direct.searchParams.set('room',code);$('viewerLink').href=direct.toString();$('viewerLink').textContent=direct.toString();$('copyBtn').dataset.link=direct.toString();drawQr($('qr'),direct.toString());
     setHostStatus('Loading secure connection engine…');
     const joinRoom=await loadTrystero();
     room=joinRoom({appId:APP_ID},code,{onJoinError:details=>setHostStatus('Connection failed: '+(details?.error?.message||details?.error||'WebRTC could not connect'),true)});
