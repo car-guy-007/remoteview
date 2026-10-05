@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c0c0e">
+<title>RemoteView</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}
+.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}
+h1{font-size:42px;margin:0 0 5px}
+p{color:#aaa;line-height:1.5}
+button,input{font:inherit;border-radius:12px;padding:14px 18px}
+button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}
+.secondary{background:#29292e;color:#fff}
+.danger{background:#7f1d1d;color:#fff}
+.hide{display:none!important}
+.code{font-size:30px;font-weight:800;letter-spacing:.14em;margin:12px 0}
+.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}
+canvas{background:#fff;padding:8px;border-radius:12px}
+a{color:#9ec5ff;word-break:break-all}
+video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}
+small{color:#888}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div id="hostCard" class="card">
+  <h1>RemoteView</h1>
+  <p>View this PC on your phone. No install. No admin. View-only.</p>
+
+  <div id="startPane">
+    <button id="startBtn">Share this PC</button>
+  </div>
+
+  <div id="sharePane" class="hide">
+    <div>ROOM CODE</div>
+    <div id="roomCode" class="code"></div>
+    <div id="hostStatus" class="status">Starting…</div>
+    <canvas id="qr" width="220" height="220"></canvas>
+    <p>Scan the QR code with your iPhone camera, or open:</p>
+    <p><a id="viewerLink" target="_blank" rel="noopener"></a></p>
+    <div class="row">
+      <button id="copyBtn" class="secondary">Copy link</button>
+      <button id="stopBtn" class="danger">Stop sharing</button>
+    </div>
+    <p><small>Closing this tab also stops sharing.</small></p>
+  </div>
+</div>
+
+<div id="viewerCard" class="card hide">
+  <h1 style="font-size:30px">RemoteView</h1>
+  <div id="viewerStatus" class="status">Loading viewer…</div>
+  <video id="remoteVideo" autoplay playsinline muted></video>
+  <div id="viewerError" class="status hide" style="color:#ffb4b4"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script type="module">
+const APP_ID = 'remoteview-cg7-mqtt-v3';
+const $ = id => document.getElementById(id);
+let room = null;
+let stream = null;
+
+function roomCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(10);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(b => alphabet[b % alphabet.length]).join('');
+}
+
+async function getJoinRoom() {
+  const mod = await import('https://esm.run/@trystero-p2p/mqtt');
+  return mod.joinRoom;
+}
+
+async function startHost() {
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 6, max: 10 } },
+      audio: false
+    });
+
+    const code = roomCode();
+    $('startPane').classList.add('hide');
+    $('sharePane').classList.remove('hide');
+    $('roomCode').textContent = code;
+    $('hostStatus').textContent = 'Loading connection…';
+
+    const u = new URL(location.href);
+    u.search = '';
+    u.searchParams.set('room', code);
+    const viewerUrl = u.toString();
+    $('viewerLink').href = viewerUrl;
+    $('viewerLink').textContent = viewerUrl;
+
+    await QRCode.toCanvas($('qr'), viewerUrl, { width: 204, margin: 1, errorCorrectionLevel: 'M' });
+
+    const joinRoom = await getJoinRoom();
+    room = joinRoom({ appId: APP_ID }, code);
+    $('hostStatus').textContent = 'Waiting for your phone…';
+
+    room.onPeerJoin = peerId => {
+      room.addStream(stream, { target: peerId });
+      $('hostStatus').textContent = 'Phone connected — LIVE';
+    };
+
+    room.onPeerLeave = () => {
+      $('hostStatus').textContent = 'Viewer left. Waiting…';
+    };
+
+    stream.getVideoTracks()[0].addEventListener('ended', stopHost);
+  } catch (e) {
+    alert('RemoteView error: ' + (e?.message || e));
+  }
+}
+
+function stopHost() {
+  try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+  try { room?.leave(); } catch {}
+  stream = null;
+  room = null;
+  $('sharePane').classList.add('hide');
+  $('startPane').classList.remove('hide');
+}
+
+async function startViewer(code) {
+  $('hostCard').classList.add('hide');
+  $('viewerCard').classList.remove('hide');
+  const status = $('viewerStatus');
+  const err = $('viewerError');
+  const video = $('remoteVideo');
+
+  window.addEventListener('error', ev => {
+    err.textContent = 'Viewer error: ' + (ev.message || 'unknown error');
+    err.classList.remove('hide');
+  });
+
+  window.addEventListener('unhandledrejection', ev => {
+    err.textContent = 'Viewer error: ' + (ev.reason?.message || ev.reason || 'unknown error');
+    err.classList.remove('hide');
+  });
+
+  try {
+    status.textContent = 'Connecting to ' + code + '…';
+    const joinRoom = await getJoinRoom();
+    room = joinRoom({ appId: APP_ID }, code);
+
+    room.onPeerJoin = () => {
+      status.textContent = 'Connected to PC — waiting for screen…';
+    };
+
+    room.onPeerStream = incoming => {
+      video.srcObject = incoming;
+      video.play().catch(() => {});
+      status.textContent = 'LIVE • VIEW ONLY';
+      err.classList.add('hide');
+    };
+
+    room.onPeerLeave = () => {
+      video.srcObject = null;
+      status.textContent = 'PC disconnected.';
+    };
+  } catch (e) {
+    status.textContent = 'RemoteView failed to connect.';
+    err.textContent = 'Could not start viewer:\n' + (e?.message || e);
+    err.classList.remove('hide');
+  }
+}
+
+$('startBtn').addEventListener('click', startHost);
+$('stopBtn').addEventListener('click', stopHost);
+$('copyBtn').addEventListener('click', async () => {
+  const text = $('viewerLink').href;
+  try {
+    await navigator.clipboard.writeText(text);
+    $('copyBtn').textContent = 'Copied';
+    setTimeout(() => $('copyBtn').textContent = 'Copy link', 1000);
+  } catch {
+    prompt('Copy this link:', text);
+  }
+});
+
+const code = new URLSearchParams(location.search).get('room');
+if (code) startViewer(code.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12));
+</script>
+</body>
+</html>
