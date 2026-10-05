@@ -7,6 +7,16 @@
 <title>RemoteView</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}h1{font-size:42px;margin:0 0 5px}p{color:#aaa;line-height:1.5}button,input{font:inherit;border-radius:12px;padding:14px 18px}button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}.secondary{background:#29292e;color:#fff}.danger{background:#7f1d1d;color:#fff}.hide{display:none!important}.code{font-size:34px;font-weight:800;letter-spacing:.14em;margin:12px 0;word-break:break-all}.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}.error{color:#ffb4b4;border:1px solid #5b2424}.ok{color:#baf7c8}.row{display:flex;gap:10px;flex-wrap:wrap}input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-transform:uppercase;letter-spacing:.12em;font-weight:700}a{color:#9ec5ff;word-break:break-all}video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}#qr{display:block;background:#fff;padding:8px;border-radius:14px;width:min(245px,100%);height:auto;margin:14px 0}small{color:#888}.muted{color:#888;font-size:13px}
+#viewerCard{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;background:#000;border:0;border-radius:0;padding:0;overflow:hidden;z-index:9999}
+#videoStage{position:absolute;inset:0;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
+#remoteVideo{position:absolute;inset:0;width:100%;height:100%;max-height:none;border-radius:0;object-fit:contain;transform-origin:center center;will-change:transform}
+#viewerTop{position:absolute;top:0;left:0;right:0;z-index:3;padding:max(10px,env(safe-area-inset-top)) 12px 10px;background:linear-gradient(to bottom,rgba(0,0,0,.78),rgba(0,0,0,0));pointer-events:none}
+#viewerTop .status{display:inline-block;margin:0;padding:8px 10px;background:rgba(10,10,12,.72);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-size:13px}
+#viewerError{pointer-events:auto}
+#viewerControls{position:absolute;left:0;right:0;bottom:0;z-index:4;display:flex;justify-content:center;gap:8px;flex-wrap:wrap;padding:12px max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:linear-gradient(to top,rgba(0,0,0,.8),rgba(0,0,0,0));transition:opacity .2s}
+#viewerControls button{padding:10px 13px;background:rgba(34,34,38,.82);color:#fff;border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#zoomBadge{position:absolute;right:12px;top:max(12px,env(safe-area-inset-top));z-index:4;padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;pointer-events:none}
+.viewer-controls-hidden #viewerControls{opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
@@ -45,14 +55,20 @@
   </div>
 </div>
 
-<div id="viewerCard" class="card hide">
-  <h1 style="font-size:30px">RemoteView</h1>
-  <div id="viewerStatus" class="status">Loading viewer…</div>
-  <div id="viewerError" class="status error hide"></div>
-  <video id="remoteVideo" autoplay playsinline muted></video>
-  <div class="row" style="margin-top:12px">
-    <button id="playBtn" type="button" class="secondary hide">Play video</button>
-    <button id="leaveBtn" type="button" class="secondary">Leave</button>
+<div id="viewerCard" class="hide">
+  <div id="videoStage">
+    <video id="remoteVideo" autoplay playsinline muted></video>
+  </div>
+  <div id="viewerTop">
+    <div id="viewerStatus" class="status">Loading viewer…</div>
+    <div id="viewerError" class="status error hide"></div>
+  </div>
+  <div id="zoomBadge">1.0×</div>
+  <div id="viewerControls">
+    <button id="fullBtn" type="button">Fullscreen</button>
+    <button id="resetZoomBtn" type="button">Reset zoom</button>
+    <button id="playBtn" type="button" class="hide">Play video</button>
+    <button id="leaveBtn" type="button">Leave</button>
   </div>
 </div>
 
@@ -62,12 +78,30 @@ const APP_ID='remoteview-cg7-v5';
 const TRYSTERO_URL='https://esm.run/trystero@0.25.4';
 const $=id=>document.getElementById(id);
 let room=null,screenStream=null,viewerTimer=null;
+let zoom=1,panX=0,panY=0,gesture=null,lastTap=0,controlsTimer=null;
 
 function cleanCode(v){return(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)}
 function makeRoomCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',b=new Uint8Array(8);crypto.getRandomValues(b);return[...b].map(x=>a[x%a.length]).join('')}
 function showPane(id){['homePane','joinPane','sharePane'].forEach(x=>$(x).classList.add('hide'));$(id).classList.remove('hide')}
 function setHostStatus(msg,isError=false){const el=$('hostStatus');el.textContent=msg;el.classList.toggle('error',isError)}
 function setViewerStatus(msg,isError=false){$('viewerStatus').textContent=msg;$('viewerError').classList.add('hide');if(isError){$('viewerError').textContent=msg;$('viewerError').classList.remove('hide')}}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+function applyVideoTransform(){const v=$('remoteVideo');v.style.transform='translate3d('+panX+'px,'+panY+'px,0) scale('+zoom+')';$('zoomBadge').textContent=zoom.toFixed(1)+'×'}
+function resetZoom(){zoom=1;panX=0;panY=0;gesture=null;applyVideoTransform()}
+function touchDistance(a,b){const x=a.clientX-b.clientX,y=a.clientY-b.clientY;return Math.hypot(x,y)}
+function showViewerControls(){const card=$('viewerCard');card.classList.remove('viewer-controls-hidden');clearTimeout(controlsTimer);controlsTimer=setTimeout(()=>card.classList.add('viewer-controls-hidden'),3000)}
+async function requestViewerFullscreen(){
+  const card=$('viewerCard'),v=$('remoteVideo');
+  try{
+    if(card.requestFullscreen){await card.requestFullscreen({navigationUI:'hide'});return}
+    if(card.webkitRequestFullscreen){card.webkitRequestFullscreen();return}
+    if(v.webkitEnterFullscreen){v.webkitEnterFullscreen();return}
+    if(v.requestFullscreen){await v.requestFullscreen();return}
+    showViewerControls();
+  }catch(e){
+    try{if(v.webkitEnterFullscreen)v.webkitEnterFullscreen()}catch{}
+  }
+}
 async function loadTrystero(){const mod=await import(TRYSTERO_URL);if(typeof mod.joinRoom!=='function')throw new Error('Connection engine loaded without joinRoom()');return mod.joinRoom}
 
 // Self-contained QR Model 2 v5-L generator (sufficient for this app's short HTTPS viewer URLs).
@@ -111,18 +145,49 @@ function stopHost(){try{screenStream?.getTracks().forEach(t=>t.stop())}catch{}tr
 
 async function startViewer(code){
   code=cleanCode(code);if(!code)return;
-  $('mainCard').classList.add('hide');$('viewerCard').classList.remove('hide');$('viewerError').classList.add('hide');$('playBtn').classList.add('hide');setViewerStatus('Loading secure connection engine…');
+  $('mainCard').classList.add('hide');$('viewerCard').classList.remove('hide');$('viewerError').classList.add('hide');$('playBtn').classList.add('hide');resetZoom();showViewerControls();setViewerStatus('Loading secure connection engine…');
   try{
     const joinRoom=await loadTrystero();setViewerStatus('Connecting to '+code+'…');
     room=joinRoom({appId:APP_ID},code,{onJoinError:details=>setViewerStatus('Connection failed: '+(details?.error?.message||details?.error||'WebRTC could not connect'),true)});
     room.onPeerJoin=()=>setViewerStatus('Connected to PC — waiting for screen…');
-    room.onPeerStream=incoming=>{const v=$('remoteVideo');v.srcObject=incoming;setViewerStatus('LIVE • VIEW ONLY');const p=v.play();if(p&&p.catch)p.catch(()=>{$('playBtn').classList.remove('hide')})};
+    room.onPeerStream=incoming=>{const v=$('remoteVideo');v.srcObject=incoming;setViewerStatus('LIVE • pinch to zoom');showViewerControls();const p=v.play();if(p&&p.catch)p.catch(()=>{$('playBtn').classList.remove('hide')})};
     room.onPeerLeave=()=>{$('remoteVideo').srcObject=null;setViewerStatus('PC disconnected.')};
     clearTimeout(viewerTimer);viewerTimer=setTimeout(()=>{if(!$('viewerStatus').textContent.startsWith('LIVE'))setViewerStatus('Still connecting… If this persists, the network may require a TURN relay.',true)},20000);
   }catch(e){setViewerStatus('Could not load connection engine: '+(e?.message||e),true)}
 }
-function leaveViewer(){clearTimeout(viewerTimer);try{room?.leave()}catch{}room=null;$('remoteVideo').srcObject=null;$('viewerCard').classList.add('hide');$('mainCard').classList.remove('hide');history.replaceState({},'',location.pathname);showPane('homePane')}
+function leaveViewer(){clearTimeout(viewerTimer);clearTimeout(controlsTimer);try{room?.leave()}catch{}room=null;$('remoteVideo').srcObject=null;resetZoom();$('viewerCard').classList.add('hide');$('mainCard').classList.remove('hide');history.replaceState({},'',location.pathname);showPane('homePane')}
 
+const stage=$('videoStage');
+stage.addEventListener('touchstart',e=>{
+  showViewerControls();
+  if(e.touches.length===2){
+    e.preventDefault();
+    gesture={type:'pinch',distance:touchDistance(e.touches[0],e.touches[1]),zoom,panX,panY};
+  }else if(e.touches.length===1&&zoom>1){
+    gesture={type:'pan',x:e.touches[0].clientX,y:e.touches[0].clientY,panX,panY};
+  }
+},{passive:false});
+stage.addEventListener('touchmove',e=>{
+  if(!gesture)return;
+  if(gesture.type==='pinch'&&e.touches.length===2){
+    e.preventDefault();
+    const next=clamp(gesture.zoom*(touchDistance(e.touches[0],e.touches[1])/Math.max(1,gesture.distance)),1,5);
+    zoom=next;if(zoom<=1.01){zoom=1;panX=0;panY=0}applyVideoTransform();
+  }else if(gesture.type==='pan'&&e.touches.length===1&&zoom>1){
+    e.preventDefault();
+    panX=gesture.panX+(e.touches[0].clientX-gesture.x);
+    panY=gesture.panY+(e.touches[0].clientY-gesture.y);
+    applyVideoTransform();
+  }
+},{passive:false});
+stage.addEventListener('touchend',e=>{if(e.touches.length===0)gesture=null;if(zoom<=1.01)resetZoom()},{passive:false});
+stage.addEventListener('click',()=>{
+  const now=Date.now();
+  if(now-lastTap<320){if(zoom>1)resetZoom();else{zoom=2;applyVideoTransform()}lastTap=0}
+  else{lastTap=now;showViewerControls()}
+});
+$('fullBtn').addEventListener('click',requestViewerFullscreen);
+$('resetZoomBtn').addEventListener('click',()=>{resetZoom();showViewerControls()});
 $('shareBtn').addEventListener('click',startHost);$('viewBtn').addEventListener('click',()=>showPane('joinPane'));$('backBtn').addEventListener('click',()=>showPane('homePane'));$('joinBtn').addEventListener('click',()=>startViewer($('roomInput').value));$('roomInput').addEventListener('input',e=>e.target.value=cleanCode(e.target.value));$('roomInput').addEventListener('keydown',e=>{if(e.key==='Enter')startViewer(e.target.value)});$('stopBtn').addEventListener('click',stopHost);$('leaveBtn').addEventListener('click',leaveViewer);$('playBtn').addEventListener('click',()=>{$('remoteVideo').play();$('playBtn').classList.add('hide')});$('copyBtn').addEventListener('click',async()=>{const text=$('copyBtn').dataset.link;try{await navigator.clipboard.writeText(text);$('copyBtn').textContent='Copied';setTimeout(()=>$('copyBtn').textContent='Copy viewer link',1000)}catch{prompt('Copy this link:',text)}});
 window.addEventListener('error',e=>{const el=$('startupError');el.textContent='Page error: '+(e.message||'unknown error');el.classList.remove('hide')});window.addEventListener('unhandledrejection',e=>{const el=$('startupError');el.textContent='Page error: '+(e.reason?.message||e.reason||'unknown error');el.classList.remove('hide')});
 const initialCode=new URLSearchParams(location.search).get('room');if(initialCode)startViewer(initialCode);
