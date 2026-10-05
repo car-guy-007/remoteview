@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0c0c0e">
 <title>RemoteView</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}h1{font-size:42px;margin:0 0 5px}p{color:#aaa;line-height:1.5}button,input{font:inherit;border-radius:12px;padding:14px 18px}button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}.secondary{background:#29292e;color:#fff}.danger{background:#7f1d1d;color:#fff}.hide{display:none!important}.code{font-size:34px;font-weight:800;letter-spacing:.14em;margin:12px 0;word-break:break-all}.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}.error{color:#ffb4b4;border:1px solid #5b2424}.ok{color:#baf7c8}.row{display:flex;gap:10px;flex-wrap:wrap}input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-transform:uppercase;letter-spacing:.12em;font-weight:700}a{color:#9ec5ff;word-break:break-all}video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}#qr{display:block;background:#fff;padding:8px;border-radius:14px;width:min(245px,100%);height:auto;margin:14px 0}small{color:#888}.muted{color:#888;font-size:13px}
+*{box-sizing:border-box}body{margin:0;background:#0c0c0e;color:#eee;font:16px -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;display:grid;place-items:center;padding:18px}.card{width:min(680px,100%);background:#17171a;border:1px solid #303036;border-radius:20px;padding:24px}h1{font-size:42px;margin:0 0 5px}p{color:#aaa;line-height:1.5}button,input,select{font:inherit;border-radius:12px;padding:14px 18px}button{border:0;font-weight:750;cursor:pointer;background:#eee;color:#111}.secondary{background:#29292e;color:#fff}.danger{background:#7f1d1d;color:#fff}.hide{display:none!important}.code{font-size:34px;font-weight:800;letter-spacing:.14em;margin:12px 0;word-break:break-all}.status{padding:12px;background:#0e0e10;border-radius:10px;margin:14px 0;color:#bbb;white-space:pre-wrap}.error{color:#ffb4b4;border:1px solid #5b2424}.ok{color:#baf7c8}.row{display:flex;gap:10px;flex-wrap:wrap}input{width:100%;border:1px solid #38383e;background:#0e0e10;color:#fff;text-transform:uppercase;letter-spacing:.12em;font-weight:700}select{border:1px solid #38383e;background:#29292e;color:#fff}a{color:#9ec5ff;word-break:break-all}video{width:100%;max-height:82vh;background:#000;border-radius:12px;object-fit:contain}#qr{display:block;background:#fff;padding:8px;border-radius:14px;width:min(245px,100%);height:auto;margin:14px 0}small{color:#888}.muted{color:#888;font-size:13px}
 #viewerCard{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;background:#000;border:0;border-radius:0;padding:0;overflow:hidden;z-index:9999}
 #videoStage{position:absolute;inset:0;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
 #remoteVideo{position:absolute;inset:0;width:100%;height:100%;max-height:none;border-radius:0;object-fit:contain;transform-origin:center center;will-change:transform}
@@ -50,12 +50,18 @@
     <canvas id="qr" width="245" height="245"></canvas>
     <p>Or open the same RemoteView page on your phone and enter the room code.</p>
     <p><a id="viewerLink" target="_blank" rel="noopener"></a></p>
-    <div class="row">
-      <button id="micBtn" type="button" class="secondary">Mic: On</button>
+    <div class="row" style="align-items:center">
+      <label for="audioSource"><b>Audio:</b></label>
+      <select id="audioSource">
+        <option value="auto">Auto</option>
+        <option value="system">System audio</option>
+        <option value="mic">Microphone</option>
+        <option value="off">Off</option>
+      </select>
       <button id="copyBtn" type="button" class="secondary">Copy viewer link</button>
       <button id="stopBtn" type="button" class="danger">Stop sharing</button>
     </div>
-    <div id="micState">PC microphone will be sent with the screen stream.</div>
+    <div id="micState">Audio source: detecting…</div>
     <p><small>Closing this tab also stops sharing.</small></p>
   </div>
 </div>
@@ -84,10 +90,10 @@
 <script>
 'use strict';
 const APP_ID='remoteview-cg7-v5';
-const BUILD='7';
+const BUILD='8';
 const TRYSTERO_URL='https://esm.run/trystero@0.25.4';
 const $=id=>document.getElementById(id);
-let room=null,screenStream=null,micStream=null,outgoingStream=null,viewerTimer=null;
+let room=null,screenStream=null,micStream=null,outgoingStream=null,systemAudioTrack=null,micAudioTrack=null,currentAudioTrack=null,viewerTimer=null;
 let zoom=1,panX=0,panY=0,gesture=null,lastTap=0,controlsTimer=null,wakeLock=null,sessionStartedAt=0,sessionTicker=null,fillMode=false;
 
 function cleanCode(v){return(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)}
@@ -127,13 +133,44 @@ function toggleFit(){
   $('fitBtn').classList.toggle('active',fillMode);
   resetZoom();showViewerControls();
 }
-function toggleHostMic(){
-  const track=micStream?.getAudioTracks?.()[0];
-  if(!track){$('micState').textContent='Microphone is unavailable.';return}
-  track.enabled=!track.enabled;
-  $('micBtn').textContent=track.enabled?'Mic: On':'Mic: Off';
-  $('micBtn').classList.toggle('active',track.enabled);
-  $('micState').textContent=track.enabled?'PC microphone is being sent.':'PC microphone is muted.';
+function getRequestedAudioTrack(){
+  const wanted=$('audioSource').value;
+  if(wanted==='off')return null;
+  if(wanted==='system')return systemAudioTrack||null;
+  if(wanted==='mic')return micAudioTrack||null;
+  return systemAudioTrack||micAudioTrack||null;
+}
+function describeAudio(){
+  const wanted=$('audioSource').value;
+  if(currentAudioTrack===systemAudioTrack&&currentAudioTrack)return 'Audio source: System audio';
+  if(currentAudioTrack===micAudioTrack&&currentAudioTrack)return 'Audio source: Microphone';
+  if(wanted==='system'&&!systemAudioTrack)return 'System audio unavailable. Re-share and enable “Share system audio” in Chrome/Edge.';
+  if(wanted==='mic'&&!micAudioTrack)return 'Microphone unavailable or permission denied.';
+  if(wanted==='off')return 'Audio source: Off';
+  return 'Audio source: None available';
+}
+async function switchAudioSource(){
+  const next=getRequestedAudioTrack();
+  if(next===currentAudioTrack){$('micState').textContent=describeAudio();return}
+  try{
+    if(room&&currentAudioTrack&&next){
+      await room.replaceTrack(currentAudioTrack,next);
+      if(outgoingStream){outgoingStream.removeTrack(currentAudioTrack);outgoingStream.addTrack(next)}
+    }else if(room&&currentAudioTrack&&!next){
+      await room.removeTrack(currentAudioTrack);
+      outgoingStream?.removeTrack(currentAudioTrack);
+    }else if(room&&!currentAudioTrack&&next){
+      outgoingStream?.addTrack(next);
+      await room.addTrack(next,outgoingStream);
+    }else{
+      if(outgoingStream&&currentAudioTrack)outgoingStream.removeTrack(currentAudioTrack);
+      if(outgoingStream&&next&&!outgoingStream.getTracks().includes(next))outgoingStream.addTrack(next);
+    }
+    currentAudioTrack=next;
+    $('micState').textContent=describeAudio();
+  }catch(e){
+    $('micState').textContent='Audio switch failed: '+(e?.message||e);
+  }
 }
 async function requestViewerFullscreen(){
   const card=$('viewerCard'),v=$('remoteVideo');
@@ -174,19 +211,21 @@ async function startHost(){
   try{
     if(!window.isSecureContext)throw new Error('RemoteView must be opened over HTTPS.');
     if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=='function')throw new Error('This browser does not support screen sharing. Use current Chrome or Edge on Windows.');
-    screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:6,max:10}},audio:false});
+    screenStream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:6,max:10}},audio:true});
+    systemAudioTrack=screenStream.getAudioTracks()[0]||null;
     try{
       micStream=await navigator.mediaDevices.getUserMedia({video:false,audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
     }catch(e){
       micStream=null;
     }
+    micAudioTrack=micStream?.getAudioTracks?.()[0]||null;
+    currentAudioTrack=getRequestedAudioTrack();
     outgoingStream=new MediaStream([
       ...screenStream.getVideoTracks(),
-      ...(micStream?micStream.getAudioTracks():[])
+      ...(currentAudioTrack?[currentAudioTrack]:[])
     ]);
     const code=makeRoomCode();showPane('sharePane');$('roomCode').textContent=code;setHostStatus('Preparing viewer link…');
-    if(micStream?.getAudioTracks?.().length){$('micBtn').textContent='Mic: On';$('micBtn').classList.add('active');$('micState').textContent='PC microphone is being sent.'}
-    else{$('micBtn').textContent='Mic unavailable';$('micBtn').classList.remove('active');$('micState').textContent='Microphone permission was denied or no microphone was found.'}
+    $('micState').textContent=describeAudio();
     const base=new URL(location.href);base.search='';base.hash='';base.searchParams.set('v',BUILD);const direct=new URL(base);direct.searchParams.set('room',code);$('viewerLink').href=direct.toString();$('viewerLink').textContent=direct.toString();$('copyBtn').dataset.link=direct.toString();drawQr($('qr'),direct.toString());
     setHostStatus('Loading secure connection engine…');
     const joinRoom=await loadTrystero();
@@ -197,7 +236,7 @@ async function startHost(){
     screenStream.getVideoTracks()[0]?.addEventListener('ended',stopHost);
   }catch(e){if(screenStream){try{screenStream.getTracks().forEach(t=>t.stop())}catch{}screenStream=null}alert('RemoteView error: '+(e?.message||e));}
 }
-function stopHost(){try{screenStream?.getTracks().forEach(t=>t.stop())}catch{}try{micStream?.getTracks().forEach(t=>t.stop())}catch{}try{room?.leave()}catch{}screenStream=null;micStream=null;outgoingStream=null;room=null;showPane('homePane')}
+function stopHost(){try{screenStream?.getTracks().forEach(t=>t.stop())}catch{}try{micStream?.getTracks().forEach(t=>t.stop())}catch{}try{room?.leave()}catch{}screenStream=null;micStream=null;outgoingStream=null;systemAudioTrack=null;micAudioTrack=null;currentAudioTrack=null;room=null;showPane('homePane')}
 
 async function startViewer(code){
   code=cleanCode(code);if(!code)return;
@@ -247,7 +286,7 @@ $('fullBtn').addEventListener('click',requestViewerFullscreen);
 $('fitBtn').addEventListener('click',toggleFit);
 $('wakeBtn').addEventListener('click',toggleWakeLock);
 $('resetZoomBtn').addEventListener('click',()=>{resetZoom();showViewerControls()});
-$('micBtn').addEventListener('click',toggleHostMic);
+$('audioSource').addEventListener('change',switchAudioSource);
 $('shareBtn').addEventListener('click',startHost);$('viewBtn').addEventListener('click',()=>showPane('joinPane'));$('backBtn').addEventListener('click',()=>showPane('homePane'));$('joinBtn').addEventListener('click',()=>startViewer($('roomInput').value));$('roomInput').addEventListener('input',e=>e.target.value=cleanCode(e.target.value));$('roomInput').addEventListener('keydown',e=>{if(e.key==='Enter')startViewer(e.target.value)});$('stopBtn').addEventListener('click',stopHost);$('leaveBtn').addEventListener('click',leaveViewer);$('playBtn').addEventListener('click',()=>{$('remoteVideo').play();$('playBtn').classList.add('hide')});$('copyBtn').addEventListener('click',async()=>{const text=$('copyBtn').dataset.link;try{await navigator.clipboard.writeText(text);$('copyBtn').textContent='Copied';setTimeout(()=>$('copyBtn').textContent='Copy viewer link',1000)}catch{prompt('Copy this link:',text)}});
 window.addEventListener('error',e=>{const el=$('startupError');el.textContent='Page error: '+(e.message||'unknown error');el.classList.remove('hide')});window.addEventListener('unhandledrejection',e=>{const el=$('startupError');el.textContent='Page error: '+(e.reason?.message||e.reason||'unknown error');el.classList.remove('hide')});
 const initialCode=new URLSearchParams(location.search).get('room');if(initialCode)startViewer(initialCode);
