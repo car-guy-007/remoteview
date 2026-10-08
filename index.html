@@ -68,7 +68,7 @@
 
 <div id="viewerCard" class="hide">
   <div id="videoStage">
-    <video id="remoteVideo" autoplay playsinline muted></video>
+    <video id="remoteVideo" autoplay playsinline muted webkit-playsinline></video>
   </div>
   <div id="viewerTop">
     <div id="viewerStatus" class="status">Loading viewer…</div>
@@ -78,7 +78,7 @@
   <div id="zoomBadge">1.0×</div>
   <div id="viewerControls">
     <button id="soundBtn" type="button">Sound: Off</button>
-    <button id="fullBtn" type="button">Fullscreen</button>
+    <button id="pipBtn" type="button">Floating window</button><button id="fullBtn" type="button">Fullscreen</button>
     <button id="fitBtn" type="button">Fill screen</button>
     <button id="wakeBtn" type="button">Keep awake</button>
     <button id="resetZoomBtn" type="button">Reset zoom</button>
@@ -90,7 +90,7 @@
 <script>
 'use strict';
 const APP_ID='remoteview-cg7-v5';
-const BUILD='8';
+const BUILD='9';
 const TRYSTERO_URL='https://esm.run/trystero@0.25.4';
 const $=id=>document.getElementById(id);
 let room=null,screenStream=null,micStream=null,outgoingStream=null,systemAudioTrack=null,micAudioTrack=null,currentAudioTrack=null,viewerTimer=null;
@@ -183,6 +183,17 @@ async function requestViewerFullscreen(){
   }catch(e){
     try{if(v.webkitEnterFullscreen)v.webkitEnterFullscreen()}catch{}
   }
+}
+async function enterPictureInPicture(){
+ const v=$('remoteVideo');
+ try{
+  if(!v.srcObject)throw new Error('Connect to your PC first.');
+  v.muted=true;$('soundBtn').textContent='Sound: Off';$('soundBtn').classList.remove('active');
+  if(v.paused)await v.play();
+  if(document.pictureInPictureEnabled&&v.requestPictureInPicture){await v.requestPictureInPicture();return}
+  if(typeof v.webkitSupportsPresentationMode==='function'&&v.webkitSupportsPresentationMode('picture-in-picture')){v.webkitSetPresentationMode('picture-in-picture');return}
+  throw new Error('Picture-in-Picture is not supported for this live stream in this browser.');
+ }catch(e){setViewerStatus('Floating window unavailable: '+(e?.message||e),true);showViewerControls()}
 }
 async function loadTrystero(){const mod=await import(TRYSTERO_URL);if(typeof mod.joinRoom!=='function')throw new Error('Connection engine loaded without joinRoom()');return mod.joinRoom}
 
@@ -282,6 +293,7 @@ stage.addEventListener('click',()=>{
   else{lastTap=now;showViewerControls()}
 });
 $('soundBtn').addEventListener('click',toggleSound);
+$('pipBtn').addEventListener('click',enterPictureInPicture);
 $('fullBtn').addEventListener('click',requestViewerFullscreen);
 $('fitBtn').addEventListener('click',toggleFit);
 $('wakeBtn').addEventListener('click',toggleWakeLock);
